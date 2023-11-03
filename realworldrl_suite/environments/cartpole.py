@@ -447,6 +447,7 @@ class RealWorldBalance(realworld_env.Base, cartpole.Balance):
     """Setup for the perturbations specification of the task."""
     self._perturb_enabled = perturb_spec.get('enable', False)
     self._perturb_period = perturb_spec.get('period', 1)
+    self.slider_range = perturb_spec.get('slider_range', 1.8)
 
     if self._perturb_enabled:
       # Add perturbations specifications.
@@ -505,6 +506,10 @@ class RealWorldBalance(realworld_env.Base, cartpole.Balance):
     # Create new physics object with the perturb parameter.
     xml_string = common.read_model('cartpole.xml')
     mjcf = etree.fromstring(xml_string)
+
+    # extend slider range
+    slider = mjcf.find('./worldbody/body/joint')
+    slider.set('range', f'{-self.slider_range} {self.slider_range}')
     # self._perturb_param is now a list
     if isinstance(self._perturb_param, str):
         if self._perturb_param in ['pole_length', 'pole_mass']:
