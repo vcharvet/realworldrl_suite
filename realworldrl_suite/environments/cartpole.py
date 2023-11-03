@@ -452,9 +452,10 @@ class RealWorldBalance(realworld_env.Base, cartpole.Balance):
       # Add perturbations specifications.
       self._perturb_param = perturb_spec.get('param', 'pole_length')
       # Making sure object to perturb is supported.
-      if self._perturb_param not in PERTURB_PARAMS:
-        raise ValueError("""param was: {}. Currently only supporting {}.
-        """.format(self._perturb_param, PERTURB_PARAMS))
+      if (self._perturb_param not in PERTURB_PARAMS):
+          if not (set(self._perturb_param)<= set(PERTURB_PARAMS)):
+              raise ValueError("""param was: {}. Currently only supporting {}.
+                """.format(self._perturb_param, PERTURB_PARAMS))
 
       # Setting perturbation function.
       self._perturb_scheduler = perturb_spec.get('scheduler', 'constant')
@@ -487,6 +488,14 @@ class RealWorldBalance(realworld_env.Base, cartpole.Balance):
         self._perturb_min = perturb_spec.get('min', 5e-4)
         self._perturb_max = perturb_spec.get('max', 3.0)
         self._perturb_std = perturb_spec.get('std', 0.3)
+      else:  # self._perturb_param is a list
+        self._perturb_cur = perturb_spec.get('start', [1., 0.1])
+        self._perturb_start = perturb_spec.get('start', [1., 0.1])
+        self._perturb_min = perturb_spec.get('min', [0.3, 0.1])
+        self._perturb_max = perturb_spec.get('max', [3., 10])
+        self._perturb_std = perturb_spec.get('std', [0.3, 0.5])
+
+
 
   def update_physics(self):
     """Returns a new Physics object with perturbed parameter."""
@@ -496,20 +505,36 @@ class RealWorldBalance(realworld_env.Base, cartpole.Balance):
     # Create new physics object with the perturb parameter.
     xml_string = common.read_model('cartpole.xml')
     mjcf = etree.fromstring(xml_string)
-
-    if self._perturb_param in ['pole_length', 'pole_mass']:
-      pole = mjcf.find('./default/default/geom')
-      if self._perturb_param == 'pole_length':
-        pole.set('fromto', '0 0 0 0 0 {}'.format(self._perturb_cur))
-        pole.set('mass', str(self._perturb_cur / 10.))
-      elif self._perturb_param == 'pole_mass':
-        pole.set('mass', str(self._perturb_cur))
-    elif self._perturb_param == 'joint_damping':
-      pole_joint = mjcf.find('./default/default/joint')
-      pole_joint.set('damping', str(self._perturb_cur))
-    elif self._perturb_param == 'slider_damping':
-      sliders_joint = mjcf.find('./worldbody/body/joint')
-      sliders_joint.set('damping', str(self._perturb_cur))
+    # self._perturb_param is now a list
+    if isinstance(self._perturb_param, str):
+        if self._perturb_param in ['pole_length', 'pole_mass']:
+            pole = mjcf.find('./default/default/geom')
+            if self._perturb_param == 'pole_length':
+                pole.set('fromto', '0 0 0 0 0 {}'.format(self._perturb_cur))
+                pole.set('mass', str(self._perturb_cur / 10.))
+            elif self._perturb_param == 'pole_mass':
+                pole.set('mass', str(self._perturb_cur))
+        elif self._perturb_param == 'joint_damping':
+            pole_joint = mjcf.find('./default/default/joint')
+            pole_joint.set('damping', str(self._perturb_cur))
+        elif self._perturb_param == 'slider_damping':
+            sliders_joint = mjcf.find('./worldbody/body/joint')
+            sliders_joint.set('damping', str(self._perturb_cur))
+    else:   # self._perturb_param is list
+        for perturb_param, perturb_cur in zip(self._perturb_param, self._perturb_cur):
+            if perturb_param in ['pole_length', 'pole_mass']:
+                pole = mjcf.find('./default/default/geom')
+            if perturb_param == 'pole_length':
+                pole.set('fromto', '0 0 0 0 0 {}'.format(perturb_cur))
+                pole.set('mass', str(perturb_cur / 10.))
+            elif perturb_param == 'pole_mass':
+                pole.set('mass', str(perturb_cur))
+            elif perturb_param == 'joint_damping':
+                pole_joint = mjcf.find('./default/default/joint')
+                pole_joint.set('damping', str(perturb_cur))
+            elif perturb_param == 'slider_damping':
+                sliders_joint = mjcf.find('./worldbody/body/joint')
+                sliders_joint.set('damping', str(perturb_cur))
 
     xml_string_modified = etree.tostring(mjcf, pretty_print=True)
     physics = Physics.from_xml_string(xml_string_modified, common.ASSETS)
